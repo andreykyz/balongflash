@@ -65,7 +65,7 @@ void main(int argc, char* argv[]) {
 	unsigned char OKrsp[] = { 0x0d, 0x0a, 0x4f, 0x4b, 0x0d, 0x0a };
 	unsigned char NAKrsp[] = { 0x03, 0x00, 0x02, 0xba, 0x0a, 0x7e };
 
-	unsigned int dpattern = 0xa55aaa55;
+	unsigned int dpattern = 0xa55aaa55;  // UkZe
 	unsigned int mflag = 0, eflag = 0, rflag = 0, sflag = 0, nflag = 0;
 	unsigned char filename[100];
 
@@ -266,11 +266,11 @@ void main(int argc, char* argv[]) {
 	tcflush(siofd, TCIOFLUSH);  // очистка выходного буфера
 
 // выходим из режима HDLC - если модем уже был в нем
-	port_timeout(1);
-	send_cmd(cmddone, 1, replybuf);
+///	port_timeout(1);
 
+///	send_cmd(cmddone, 1, replybuf);
 // Входим в HDLC-режим
-	printf("\n Входим в режим HDLC...");
+///	printf("\n Входим в режим HDLC...");
 	port_timeout(100);
 
 	for (err = 0; err < 10; err++) {
@@ -279,7 +279,7 @@ void main(int argc, char* argv[]) {
 			printf("\n Превышено число попыток входа в режим\n");
 			return;
 		}
-
+/*
 		write(siofd, datamodecmd, strlen(datamodecmd));
 		res = read(siofd, replybuf, 6);
 		if (res != 6) {
@@ -291,6 +291,7 @@ void main(int argc, char* argv[]) {
 			continue;
 		}
 
+*/
 		iolen = send_cmd(cmdver, 1, replybuf);
 		if ((iolen == 0) || (replybuf[1] != 0x0d)) {
 			printf("\n Ошибка получения версии протокола, повторяем попытку...");
@@ -376,7 +377,7 @@ void main(int argc, char* argv[]) {
 	if (rflag) {
 		printf("\n Перезарузка модема...\n");
 		send_cmd(cmd_reset, 1, replybuf);
-		write(siofd, resetcmd, strlen(resetcmd));
+///		write(siofd, resetcmd, strlen(resetcmd));
 	} else
 		send_cmd(cmddone, 1, replybuf);
 }
