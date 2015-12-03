@@ -11,6 +11,33 @@
 
 #include "hdlcio.h"
 
+#define MSG_LENGTH_MAX 100
+
+void print_hex_dump(char* buf, uint32_t len) {
+
+	char msg[MSG_LENGTH_MAX];
+
+	if (!buf) {
+		snprintf(msg, MSG_LENGTH_MAX, "(NULL)");
+	} else {
+		uint32_t i;
+		int offset = snprintf(msg, MSG_LENGTH_MAX, "dump(%d): ", len);
+		if (offset < 0)
+			return;
+		char* ptr = &msg[offset];
+
+		for (i = 0; i < len; i++) {
+			if (((i + 1) * 3) >= (MSG_LENGTH_MAX - offset))
+				break;
+			ptr += sprintf(ptr, "%02X", buf[i]);
+			*ptr = ':';
+			ptr++;
+		}
+		*(ptr - 1) = '\0';
+	}
+	printf("%s", msg);
+}
+
 //******************************************************
 //*  поиск символического имени раздела по его коду
 //******************************************************
@@ -58,7 +85,10 @@ void main(int argc, char* argv[]) {
 	unsigned char buf[40960];
 	unsigned char devname[50] = "/dev/ttyUSB0";
 	unsigned char replybuf[4096];
-	unsigned char datamodecmd[] = "AT^DATAMODE";
+	unsigned char *signvercmd;
+	char signver[] = "AT^SIGNVER=";
+	int signvercmdlen = 0;
+	unsigned char datamodecmd[] = "AT^DATAMODE\r";
 	unsigned char resetcmd[] = "AT^RESET";
 	unsigned int err;
 
@@ -80,7 +110,7 @@ void main(int argc, char* argv[]) {
 // Коды типов разделов
 //-d       - попытка переключить модем из режима HDLC в АТ-режим\n\       
 
-	while ((opt = getopt(argc, argv, "hp:mersn")) != -1) {
+	while ((opt = getopt(argc, argv, "hp:S:mersn")) != -1) {
 		switch (opt) {
 		case 'h':
 
@@ -100,6 +130,15 @@ void main(int argc, char* argv[]) {
 
 		case 'p':
 			strcpy(devname, optarg);
+			break;
+
+		case 'S':
+			signvercmdlen = strlen(optarg) + strlen(signver) + 1;
+			signvercmd = malloc(signvercmdlen);
+			memcpy(signvercmd, signver, strlen(signver));
+			signvercmd[signvercmdlen-1] = '\r';
+			strcpy(signvercmd+strlen(signver), optarg);
+			printf("signver is :%s\n", optarg);
 			break;
 
 		case 'm':
@@ -253,14 +292,13 @@ void main(int argc, char* argv[]) {
 //--------------------------------------------
 
 // Настройка SIO
-
-	if (!open_port(devname)) {
-#ifndef WIN32
-		printf("\n - Последовательный порт %s не открывается\n", devname);
-#else
-		printf("\n - Последовательный порт COM%s не открывается\n", devname);
-#endif
-		return;
+	printf("\n");
+	for (err = 0; err < 10; err++) {
+		if (!open_port(devname)) {
+			printf("Последовательный порт %s не открывается попытка %d \n", devname, err);
+			sleep(2);
+		} else
+			break;
 	}
 
 	tcflush(siofd, TCIOFLUSH);  // очистка выходного буфера
@@ -272,6 +310,7 @@ void main(int argc, char* argv[]) {
 // Входим в HDLC-режим
 ///	printf("\n Входим в режим HDLC...");
 	port_timeout(100);
+	printf("\n");
 
 	for (err = 0; err < 10; err++) {
 
@@ -279,9 +318,33 @@ void main(int argc, char* argv[]) {
 			printf("\n Превышено число попыток входа в режим\n");
 			return;
 		}
-/*
-		write(siofd, datamodecmd, strlen(datamodecmd));
+		memset(replybuf, 0, 16);
+		printf("Signver\n");
+		write(siofd, signvercmd, strlen(signvercmd));
+		sleep(1);
 		res = read(siofd, replybuf, 6);
+		printf("\nДлина ответа %d ответ:", res);
+		print_hex_dump(replybuf, res);
+		printf("\n");
+
+/*		if (res != 6) {
+			printf("\n Неправильная длина ответа на ^DATAMODE, повторяем попытку...");
+			continue;
+		}
+		if (memcmp(replybuf, OKrsp, 6) != 0) {
+			printf("\n Команда ^DATAMODE отвергнута, повторяем попытку...");
+			continue;
+		}
+*/
+		memset(replybuf, 0, 16);
+		printf("Датамоде\n");
+		write(siofd, datamodecmd, strlen(datamodecmd));
+		sleep(1);
+		res = read(siofd, replybuf, 5);
+		printf("\nДлина ответа %d ответ:", res);
+		print_hex_dump(replybuf, res);
+		printf("\n");
+		/*
 		if (res != 6) {
 			printf("\n Неправильная длина ответа на ^DATAMODE, повторяем попытку...");
 			continue;
@@ -290,13 +353,19 @@ void main(int argc, char* argv[]) {
 			printf("\n Команда ^DATAMODE отвергнута, повторяем попытку...");
 			continue;
 		}
-
 */
+		memset(replybuf, 0, 16);
+		printf("Получение протокола\n");
 		iolen = send_cmd(cmdver, 1, replybuf);
+
+		printf("\nДлина ответа %d ответ:", iolen);
+		print_hex_dump(replybuf, 6);
+		printf("\n");
 		if ((iolen == 0) || (replybuf[1] != 0x0d)) {
 			printf("\n Ошибка получения версии протокола, повторяем попытку...");
 			continue;
 		}
+//		return;
 		break;
 	}
 
