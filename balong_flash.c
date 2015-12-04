@@ -66,7 +66,7 @@ void find_pname(unsigned int id, unsigned char* pname) {
 
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-void main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) {
 
 	unsigned int i, j, res, opt, npart = 0, iolen, part, blk, blksize;
 	FILE* in;
@@ -126,7 +126,7 @@ void main(int argc, char* argv[]) {
 -r       - выйти из режима прошивки и перезагрузить модем\n\
 \n",
 			        argv[0]);
-			return;
+			return 1;
 
 		case 'p':
 			strcpy(devname, optarg);
@@ -163,18 +163,18 @@ void main(int argc, char* argv[]) {
 
 		case '?':
 		case ':':
-			return;
+			return 1;
 		}
 	}
 
 	if (eflag & sflag) {
 		printf("\n Ключи -s и -e несовместимы\n");
-		return;
+		return 1;
 	}
 
 	if (nflag & (eflag | sflag | mflag)) {
 		printf("\n Ключ -n несовместим с ключами -s, -m и -e\n");
-		return;
+		return 1;
 	}
 
 // ------  перезагрузка без указания файла
@@ -189,7 +189,7 @@ void main(int argc, char* argv[]) {
 			printf("\n - Не указан каталог с файлами\n");
 		else
 			printf("\n - Не указано имя файла для загрузки\n");
-		return;
+		return 1;
 	}
 
 	if (nflag)
@@ -200,7 +200,7 @@ void main(int argc, char* argv[]) {
 		in = fopen(argv[optind], "r");
 		if (in == 0) {
 			printf("\n Ошибка открытия %s", argv[optind]);
-			return;
+			return 1;
 		}
 	}
 
@@ -228,7 +228,7 @@ void main(int argc, char* argv[]) {
 		}
 		if (npart == 0) {
 			printf("\nРазделы не найдены!");
-			return;
+			return 1;
 		}
 	}
 
@@ -255,7 +255,7 @@ void main(int argc, char* argv[]) {
 		for (i = 0; i < npart; i++)
 			printf("\n %02i %08x %8i  %s", i, ptable[i].offset, ptable[i].size, ptable[i].pname);
 		printf("\n");
-		return;
+		return 1;
 	}
 
 //------- Режим разрезания файла прошивки
@@ -284,7 +284,7 @@ void main(int argc, char* argv[]) {
 			fclose(out);
 		}
 		printf("\n");
-		return;
+		return 1;
 	}
 
 	sio:
@@ -316,7 +316,7 @@ void main(int argc, char* argv[]) {
 
 		if (err == 10) {
 			printf("\n Превышено число попыток входа в режим\n");
-			return;
+			return 1;
 		}
 		memset(replybuf, 0, 16);
 		printf("Signver\n");
@@ -391,7 +391,7 @@ void main(int argc, char* argv[]) {
 		if ((iolen == 0) || (replybuf[1] != 2)) {
 			printf("\n Заголовок раздела не принят, код ошибки = %02x %02x %02x\n", replybuf[1], replybuf[2], replybuf[3]);
 //    dump(cmd_dload_init,13,0);
-			return;
+			return 1;
 		}
 
 		//  Подготовка к поблочному циклу
@@ -417,7 +417,7 @@ void main(int argc, char* argv[]) {
 			if ((iolen == 0) || (replybuf[1] != 2)) {
 				printf("\n Блок %i раздела не принят, код ошибки = %02x %02x %02x\n", blk, replybuf[1], replybuf[2], replybuf[3]);
 //      dump(cmd_data_packet,blksize+7,0);
-				return;
+				return 1;
 			}
 		}
 
@@ -432,7 +432,7 @@ void main(int argc, char* argv[]) {
 		if ((iolen == 0) || (replybuf[1] != 2)) {
 			printf("\n Ошибка закрытия раздела, код ошибки = %02x %02x %02x\n", replybuf[1], replybuf[2], replybuf[3]);
 //     dump(replybuf,iolen,0);
-			return;
+			return 1;
 		}
 
 	}
@@ -447,6 +447,7 @@ void main(int argc, char* argv[]) {
 		printf("\n Перезарузка модема...\n");
 		send_cmd(cmd_reset, 1, replybuf);
 ///		write(siofd, resetcmd, strlen(resetcmd));
+		return 0;
 	} else
 		send_cmd(cmddone, 1, replybuf);
 }
