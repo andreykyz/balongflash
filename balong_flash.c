@@ -5,9 +5,11 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <strings.h>
+#include <string.h>
 #include <termios.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <errno.h>
 
 #include "hdlcio.h"
 
@@ -86,6 +88,8 @@ int main(int argc, char* argv[]) {
 	unsigned char devname[50] = "/dev/ttyUSB0";
 	unsigned char replybuf[4096];
 	unsigned char *signvercmd;
+	unsigned char *preUploadcmd = "AT^GODLOAD\r";
+	unsigned char *postUploadcmd = NULL;
 	char signver[] = "AT^SIGNVER=";
 	int signvercmdlen = 0;
 	unsigned char datamodecmd[] = "AT^DATAMODE\r";
@@ -110,7 +114,7 @@ int main(int argc, char* argv[]) {
 // Коды типов разделов
 //-d       - попытка переключить модем из режима HDLC в АТ-режим\n\       
 
-	while ((opt = getopt(argc, argv, "hp:S:mersn")) != -1) {
+	while ((opt = getopt(argc, argv, "hp:S:P:L:mersn")) != -1) {
 		switch (opt) {
 		case 'h':
 
@@ -123,6 +127,7 @@ int main(int argc, char* argv[]) {
 -m       - вывести карту файла прошивки и завершить работу\n\
 -e       - разобрать файл прошивки на разделы без заголовков\n\
 -s       - разобрать файл прошивки на разделы с заголовками\n\
+-S       - параметр команды AT^SIGNVER= для E3372h\n\
 -r       - выйти из режима прошивки и перезагрузить модем\n\
 \n",
 			        argv[0]);
@@ -140,7 +145,20 @@ int main(int argc, char* argv[]) {
 			strcpy(signvercmd+strlen(signver), optarg);
 			printf("signver is :%s\n", optarg);
 			break;
-
+		case 'P':
+			if (strlen(optarg)){
+				preUploadcmd = malloc(strlen(optarg)+1);
+				strcpy(postUploadcmd, optarg);
+			} else {
+				preUploadcmd = NULL;
+			}
+			break;
+		case 'L':
+			if (strlen(optarg)){
+				postUploadcmd = malloc(strlen(optarg)+1);
+				strcpy(postUploadcmd, optarg);
+			}
+			break;
 		case 'm':
 			mflag = 1;
 			break;
@@ -293,6 +311,31 @@ int main(int argc, char* argv[]) {
 
 // Настройка SIO
 	printf("\n");
+
+	if (preUploadcmd){
+		int ret = 0;
+		for (err = 0; err < 10; err++) {
+			ret = open_port(devname);
+			if (!ret) {
+				printf("Последовательный порт %s не открывается попытка %d \n", devname, err);
+				sleep(2);
+			} else
+				break;
+		}
+		if (!ret) {
+			printf("Open port error: %s", strerror(errno));
+			return 1;
+		}
+		printf("sending: %s\n", preUploadcmd);
+		tcflush(siofd, TCIOFLUSH);
+		write(siofd, preUploadcmd, strlen(preUploadcmd));
+		read(siofd, replybuf, 3);
+		close(siofd);
+		replybuf[2] = '\0';
+		printf("%s\n", replybuf);
+		sleep(3);
+	}
+
 	for (err = 0; err < 10; err++) {
 		if (!open_port(devname)) {
 			printf("Последовательный порт %s не открывается попытка %d \n", devname, err);
