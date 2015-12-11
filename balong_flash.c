@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
 			memcpy(signvercmd, signver, strlen(signver));
 			signvercmd[signvercmdlen-1] = '\r';
 			strcpy(signvercmd+strlen(signver), optarg);
-			printf("signver is :%s\n", optarg);
+			printf("signver is :%s", optarg);
 			break;
 		case 'P':
 			if (strlen(optarg)){
@@ -314,7 +314,7 @@ int main(int argc, char* argv[]) {
 
 	if (preUploadcmd){
 		int ret = 0;
-		for (err = 0; err < 10; err++) {
+		for (err = 0; err < 20; err++) {
 			ret = open_port(devname);
 			if (!ret) {
 				printf("Последовательный порт %s не открывается попытка %d \n", devname, err);
@@ -323,89 +323,88 @@ int main(int argc, char* argv[]) {
 				break;
 		}
 		if (!ret) {
-			printf("Open port error: %s", strerror(errno));
+			printf("Open port error: %s\n", strerror(errno));
 			return 1;
 		}
+		sleep(2);
 		printf("sending: %s\n", preUploadcmd);
 		tcflush(siofd, TCIOFLUSH);
 		write(siofd, preUploadcmd, strlen(preUploadcmd));
-		read(siofd, replybuf, 3);
+		tcdrain(siofd);
 		close(siofd);
-		replybuf[2] = '\0';
-		printf("%s\n", replybuf);
-		sleep(3);
+//		return ;
+		sleep(5);
 	}
 
-	for (err = 0; err < 10; err++) {
+	for (err = 0; err < 20; err++) {
 		if (!open_port(devname)) {
 			printf("Последовательный порт %s не открывается попытка %d \n", devname, err);
 			sleep(2);
 		} else
 			break;
 	}
+	sleep(2);
 
-	tcflush(siofd, TCIOFLUSH);  // очистка выходного буфера
+	tcflush(siofd, TCIOFLUSH);  // очистка выходного/входного буфера
 
 // выходим из режима HDLC - если модем уже был в нем
-///	port_timeout(1);
+//	port_timeout(1);
 
-///	send_cmd(cmddone, 1, replybuf);
+//	send_cmd(cmddone, 1, replybuf);
 // Входим в HDLC-режим
-///	printf("\n Входим в режим HDLC...");
+//	res = read(siofd, replybuf, 9);
+
+	printf("\n Входим в режим HDLC...");
 	port_timeout(100);
 	printf("\n");
+	char tmpChar;
 
-	for (err = 0; err < 10; err++) {
+		memset(replybuf, 0, 16);
+		printf("\nSignver\n");
+		write(siofd, signvercmd, strlen(signvercmd));
+		tcdrain(siofd);
+		res = read(siofd, replybuf, 5);
+		tmpChar = replybuf[res];
+		replybuf[res]='\0';
+		printf("Длина ответа %d ответ:\n%s\n", res,replybuf);
+		replybuf[res]=tmpChar;
+		print_hex_dump(replybuf, res);
 
-		if (err == 10) {
-			printf("\n Превышено число попыток входа в режим\n");
+		memset(replybuf, 0, 16);
+		printf("\nДатамоде\n");
+		write(siofd, datamodecmd, strlen(datamodecmd));
+		tcdrain(siofd);
+		res = read(siofd, replybuf, 6);
+		tmpChar = replybuf[res];
+		replybuf[res]='\0';
+		printf("Длина ответа %d ответ:\n%s\n", res,replybuf);
+		replybuf[res]=tmpChar;
+		print_hex_dump(replybuf, res);
+		if (res != 6) {
+			printf("\n Неправильная длина ответа на ^DATAMODE");
 			return 1;
 		}
-		memset(replybuf, 0, 16);
-		printf("Signver\n");
-		write(siofd, signvercmd, strlen(signvercmd));
-		sleep(1);
-		res = read(siofd, replybuf, 6);
-		printf("\nДлина ответа %d ответ:", res);
-		print_hex_dump(replybuf, res);
-		printf("\n");
+		if (memcmp(replybuf, OKrsp, 6) != 0) {
+			printf("\n Команда ^DATAMODE отвергнута");
+			return 1;
+		}
 
-/*		if (res != 6) {
-			printf("\n Неправильная длина ответа на ^DATAMODE, повторяем попытку...");
-			continue;
-		}
-		if (memcmp(replybuf, OKrsp, 6) != 0) {
-			printf("\n Команда ^DATAMODE отвергнута, повторяем попытку...");
-			continue;
-		}
-*/
+		for (err = 0; err < 10; err++) {
+			if (err == 10) {
+				printf("\n Превышено число попыток входа в режим\n");
+				return 1;
+			}
 		memset(replybuf, 0, 16);
-		printf("Датамоде\n");
-		write(siofd, datamodecmd, strlen(datamodecmd));
-		sleep(1);
-		res = read(siofd, replybuf, 5);
-		printf("\nДлина ответа %d ответ:", res);
-		print_hex_dump(replybuf, res);
-		printf("\n");
-		/*
-		if (res != 6) {
-			printf("\n Неправильная длина ответа на ^DATAMODE, повторяем попытку...");
-			continue;
-		}
-		if (memcmp(replybuf, OKrsp, 6) != 0) {
-			printf("\n Команда ^DATAMODE отвергнута, повторяем попытку...");
-			continue;
-		}
-*/
-		memset(replybuf, 0, 16);
-		printf("Получение протокола\n");
+		printf("\nПолучение протокола\n");
 		iolen = send_cmd(cmdver, 1, replybuf);
-
-		printf("\nДлина ответа %d ответ:", iolen);
-		print_hex_dump(replybuf, 6);
-		printf("\n");
+		tcdrain(siofd);
+		print_hex_dump(replybuf, iolen);
+		tmpChar = replybuf[res];
+		replybuf[iolen]='\0';
+		printf(" Длина ответа %d ответ:\n%s\n", iolen,replybuf);
+		replybuf[iolen]=tmpChar;
 		if ((iolen == 0) || (replybuf[1] != 0x0d)) {
-			printf("\n Ошибка получения версии протокола, повторяем попытку...");
+			printf("Ошибка получения версии протокола, повторяем попытку...\n");
 			continue;
 		}
 //		return;
@@ -414,8 +413,8 @@ int main(int argc, char* argv[]) {
 
 	i = replybuf[2];
 	replybuf[3 + i] = 0;
-	printf("ok");
-	printf("\n Версия протокола: %s", replybuf + 3);
+	printf("ok\n");
+	printf("Версия протокола: %s\n", replybuf + 3);
 	printf("\n");
 
 	if ((optind >= argc) & rflag)
