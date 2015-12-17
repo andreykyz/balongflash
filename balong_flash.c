@@ -147,8 +147,10 @@ int main(int argc, char* argv[]) {
 			break;
 		case 'P':
 			if (strlen(optarg)){
-				preUploadcmd = malloc(strlen(optarg)+1);
-				strcpy(postUploadcmd, optarg);
+				preUploadcmd = malloc(strlen(optarg) + 2);
+				strcpy(preUploadcmd, optarg);
+				preUploadcmd[strlen(optarg)] = '\r';
+				preUploadcmd[strlen(optarg) + 1] = '\0';
 			} else {
 				preUploadcmd = NULL;
 			}
@@ -199,7 +201,8 @@ int main(int argc, char* argv[]) {
 //--------------------------------------------
 	if ((optind >= argc) & rflag)
 		goto sio;
-
+	if (!rflag)
+		goto sio;
 // Открытие входного файла
 //--------------------------------------------
 	if (optind >= argc) {
@@ -308,7 +311,6 @@ int main(int argc, char* argv[]) {
 	sio:
 //--------- Основной режим - запись прошивки
 //--------------------------------------------
-
 // Настройка SIO
 	printf("\n");
 
@@ -331,8 +333,22 @@ int main(int argc, char* argv[]) {
 		tcflush(siofd, TCIOFLUSH);
 		write(siofd, preUploadcmd, strlen(preUploadcmd));
 		tcdrain(siofd);
+
+		if (!rflag) {
+			sleep(2);
+			memset(replybuf, 0, 16);
+			res = read(siofd, replybuf, 6);
+			tcflush(siofd, TCIOFLUSH);
+			close(siofd);
+			if (replybuf[2] == 'O' & replybuf[3] == 'K')
+				return 0;
+			else {
+				replybuf[res] = '\0';
+				printf("%s", replybuf);
+				return 1;
+			}
+		}
 		close(siofd);
-//		return ;
 		sleep(5);
 	}
 
@@ -359,27 +375,16 @@ int main(int argc, char* argv[]) {
 	printf("\n");
 	char tmpChar;
 
-		memset(replybuf, 0, 16);
 		printf("\nSignver\n");
 		write(siofd, signvercmd, strlen(signvercmd));
 		tcdrain(siofd);
 		res = read(siofd, replybuf, 5);
-		tmpChar = replybuf[res];
-		replybuf[res]='\0';
-		printf("Длина ответа %d ответ:\n%s\n", res,replybuf);
-		replybuf[res]=tmpChar;
-		print_hex_dump(replybuf, res);
 
 		memset(replybuf, 0, 16);
 		printf("\nДатамоде\n");
 		write(siofd, datamodecmd, strlen(datamodecmd));
 		tcdrain(siofd);
 		res = read(siofd, replybuf, 6);
-		tmpChar = replybuf[res];
-		replybuf[res]='\0';
-		printf("Длина ответа %d ответ:\n%s\n", res,replybuf);
-		replybuf[res]=tmpChar;
-		print_hex_dump(replybuf, res);
 		if (res != 6) {
 			printf("\n Неправильная длина ответа на ^DATAMODE");
 			return 1;
